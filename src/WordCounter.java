@@ -49,7 +49,7 @@ public class WordCounter {
             }
 
             for (int i = 0; i <= longestWordLength; i++) // Amount of spaces in top left
-                output.append(" ");
+                output.append(' ');
 
             for (String filename : filenames) {
                 output.append(filename);
@@ -57,10 +57,30 @@ public class WordCounter {
             }
 
             output.append("total\n");
-            // =======================================================================
 
-            byte[] bytes = output.toString().getBytes();
-            Files.write(WORD_COUNT_TABLE_FILE, bytes);
+            // Other rows ============================================================
+            int filenameIdx2 = 0;
+            for (Map.Entry<String, List<Integer>> entry : map.entrySet()) {
+                String word = entry.getKey();
+                output.append(word);
+                int paddingSpaces = longestWordLength - word.length();
+                for (int i = 0; i < paddingSpaces; i++) output.append(' ');
+                output.append(' ');
+                int total = 0;
+                int widthOfCol = filenames.get(filenameIdx2).length() + 4;
+                for (Integer appearances : entry.getValue()) {
+                    output.append(appearances);
+                    total += appearances;
+                    int paddingSpaces2 = widthOfCol - appearances.toString().length();
+                    for (int i = 0; i < paddingSpaces2; i++) output.append(' ');
+                }
+
+                output.append(total);
+                output.append('\n');
+            }
+
+            // =======================================================================
+            Files.write(WORD_COUNT_TABLE_FILE, output.toString().getBytes());
 
         } catch (Exception e) {
             System.out.printf("Error when accessing directory: %s, or file: %s", FOLDER_OF_TEXT_FILES, WORD_COUNT_TABLE_FILE);
