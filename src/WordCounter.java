@@ -1,19 +1,20 @@
-import java.io.File;
+import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.*;
 
 public class WordCounter {
     // The following are the ONLY variables we will modify for grading.
     // The rest of your code must run with no changes.
     public static final Path FOLDER_OF_TEXT_FILES = Paths.get("C:\\Users\\kevin\\OneDrive\\Documents\\Stony\\CSE 216\\CSE216-HW5\\textfiles"); // path to the folder where input text files are located
     public static final Path WORD_COUNT_TABLE_FILE = Paths.get("C:\\Users\\kevin\\OneDrive\\Documents\\Stony\\CSE 216\\CSE216-HW5\\output.txt"); // path to the output plain-text (.txt) file
-    public static final int NUMBER_OF_THREADS = 2;                // max. number of threads to spawn
+    public static final int NUMBER_OF_THREADS = 4;                // max. number of threads to spawn
 
     public static List<String> filenames; // Column names
     public static HashMap<String, List<Integer>> wordTracker = new HashMap<>();
 
     public static void main(String[] args) {
-        long startTime = System.nanoTime();
+        long startTime = System.currentTimeMillis();
 
         try {
             File[] files = new File(FOLDER_OF_TEXT_FILES.toUri()).listFiles(); // List all files in specified directory
@@ -27,14 +28,28 @@ public class WordCounter {
             Collections.sort(filenames); // I don't think this is needed, but just to be safe
 
             // Part that will make use of multithreading ============================================================
-            int filenameIdx = 0; // Index for List value in wordTracker
-            for (File f : files) {
-                String contents = stripPunctuation(new String(Files.readAllBytes(Paths.get(f.toURI()))).toLowerCase());
-                String[] split = contents.split(" ");
-                for (String s : split) addToWordTracker(s, filenameIdx);
-                filenameIdx += 1;
+            int threads = Math.min(filenames.size(), NUMBER_OF_THREADS);
+            ExecutorService exec = Executors.newFixedThreadPool(threads);
+            int fileIdx = 0;
+            for (int i = 0; i < threads; i++) {
+                while (fileIdx < filenames.size()) {
+                    try {
+                        final int idx = fileIdx; // Need this for use in lambda expression.
+                        String contents = new String(Files.readAllBytes(Paths.get(files[idx].toURI())));
+                        exec.submit(() -> {
+                            String[] split = stripPunctuation(contents.toLowerCase()).split(" ");
+                            for (String s : split) addToWordTracker(s, idx);
+                        });
+                    } catch (IOException e) {
+                        System.out.println("Shouldn't happen?");
+                    }
+
+                    fileIdx++;
+                }
             }
-            // ======================================================================================================
+
+            exec.shutdown();
+            exec.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
 
             Map<String, List<Integer>> map = new TreeMap<>(wordTracker); // TreeMap sorts alphabetically
             StringBuilder output = new StringBuilder(); // Write this to file at the end
@@ -55,8 +70,8 @@ public class WordCounter {
             output.append("total\n");
 
             // Other rows ============================================================
-            filenameIdx = 0; // Need this again so reset to 0
             for (Map.Entry<String, List<Integer>> entry : map.entrySet()) { // Loop through wordTracker
+                int filenameIdx = 0;
                 String word = entry.getKey();
                 output.append(word);
                 int paddingSpaces = longestWordLength - word.length(); // Add this many spaces to line everything up
@@ -64,12 +79,13 @@ public class WordCounter {
                 output.append(' ');
 
                 int total = 0;
-                int widthOfCol = filenames.get(filenameIdx).length() + 4;
                 for (Integer appearances : entry.getValue()) {
                     output.append(appearances);
                     total += appearances;
+                    int widthOfCol = filenames.get(filenameIdx).length() + 4;
                     int paddingSpaces2 = widthOfCol - appearances.toString().length(); // Again, for lining up
                     for (int i = 0; i < paddingSpaces2; i++) output.append(' ');
+                    filenameIdx += 1;
                 }
 
                 output.append(total);
@@ -78,7 +94,7 @@ public class WordCounter {
 
             // =======================================================================
             Files.write(WORD_COUNT_TABLE_FILE, output.toString().getBytes());
-            System.out.println(System.nanoTime() - startTime); // Check runtime of program
+            System.out.println(System.currentTimeMillis() - startTime); // Check runtime of program
         } catch (Exception e) {
             System.out.printf("Error when accessing directory: %s, or file: %s", FOLDER_OF_TEXT_FILES, WORD_COUNT_TABLE_FILE);
         }
